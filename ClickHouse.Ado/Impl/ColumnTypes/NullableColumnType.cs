@@ -50,8 +50,8 @@ namespace ClickHouse.Ado.Impl.ColumnTypes
         }
         public override void ValueFromParam(ClickHouseParameter parameter)
         {
-            Nulls = new[] { parameter.Value==null };
-            InnerType.ValueFromParam(parameter);
+            Nulls = new[] { parameter.Value == null || parameter.Value == DBNull.Value };
+            InnerType.NullableValuesFromConst(new[] { parameter.Value });
         }
 
         public override object Value(int currentRow)
