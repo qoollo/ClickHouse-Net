@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+﻿    using System.Reflection;
 using System.Runtime.InteropServices;
 
 // General Information about an assembly is controlled through the following 
@@ -9,7 +9,7 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("Qoollo")]
 [assembly: AssemblyProduct("ClickHouse.Ado")]
-[assembly: AssemblyCopyright("")]
+[assembly: AssemblyCopyright("Copyright © Andrey Zakharov 2017")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
