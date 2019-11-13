@@ -181,8 +181,9 @@ namespace ClickHouse.Ado
 
         public void Close()
         {
-            if (_currentBlock != null)
-                _clickHouseConnection.Formatter.ReadResponse();
+            // Don't need to read from stream anything after close or error?
+//            if (_currentBlock != null)
+//                _clickHouseConnection.Formatter.ReadResponse();
 #if !NETCOREAPP11
             if((_behavior&CommandBehavior.CloseConnection)!=0)
                 _clickHouseConnection.Close();
