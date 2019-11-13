@@ -22,6 +22,7 @@ namespace ClickHouse.Ado
 
         private Block _currentBlock;
         private int _currentRow;
+        private bool _exceptionThrown;
 
         internal ClickHouseDataReader(ClickHouseConnection clickHouseConnection
 #if !NETCOREAPP11
@@ -181,13 +182,20 @@ namespace ClickHouse.Ado
 
         public void Close()
         {
-            // Don't need to read from stream anything after close or error?
-//            if (_currentBlock != null)
-//                _clickHouseConnection.Formatter.ReadResponse();
+            try
+            {
+                if (_currentBlock != null && !_exceptionThrown)
+                    _clickHouseConnection.Formatter.ReadResponse();
+            }
+            catch (ClickHouseException)
+            {
+                _exceptionThrown = true;
+            }
 #if !NETCOREAPP11
-            if((_behavior&CommandBehavior.CloseConnection)!=0)
+            if((_behavior&CommandBehavior.CloseConnection)!=0 || _exceptionThrown)
                 _clickHouseConnection.Close();
 #endif
+
             _clickHouseConnection = null;
         }
 #if !NETCOREAPP11
@@ -199,8 +207,16 @@ namespace ClickHouse.Ado
 
         public bool NextResult()
         {
-            _currentRow = -1;
-            return (_currentBlock = _clickHouseConnection.Formatter.ReadBlock()) != null;
+            try
+            {
+                _currentRow = -1;
+                return (_currentBlock = _clickHouseConnection.Formatter.ReadBlock()) != null;
+            }
+            catch (ClickHouseException)
+            {
+                _exceptionThrown = true;
+                throw;
+            }
         }
 
         public bool Read()
