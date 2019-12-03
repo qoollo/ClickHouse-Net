@@ -1,8 +1,8 @@
 ﻿using System;
 #if !NETCOREAPP11
 using System.Data;
+using System.IO;
 #endif
-using ClickHouse.Ado.Impl;
 using ClickHouse.Ado.Impl.ColumnTypes;
 using ClickHouse.Ado.Impl.Data;
 
@@ -92,7 +92,7 @@ namespace ClickHouse.Ado
 
         public byte GetByte(int i)
         {
-            return (byte) GetInt64(i);
+            return (byte)GetInt64(i);
         }
 
         public long GetBytes(int i, long fieldOffset, byte[] buffer, int bufferoffset, int length)
@@ -190,9 +190,15 @@ namespace ClickHouse.Ado
             catch (ClickHouseException)
             {
                 _exceptionThrown = true;
+                _clickHouseConnection.MakeBroken();
+            }
+            catch (IOException)
+            {
+                _exceptionThrown = true;
+                _clickHouseConnection.MakeBroken();
             }
 #if !NETCOREAPP11
-            if((_behavior&CommandBehavior.CloseConnection)!=0 || _exceptionThrown)
+            if ((_behavior & CommandBehavior.CloseConnection) != 0 || _exceptionThrown)
                 _clickHouseConnection.Close();
 #endif
 
@@ -215,13 +221,20 @@ namespace ClickHouse.Ado
             catch (ClickHouseException)
             {
                 _exceptionThrown = true;
+                _clickHouseConnection.MakeBroken();
                 throw;
+            }
+            catch (IOException ex)
+            {
+                _exceptionThrown = true;
+                _clickHouseConnection.MakeBroken();
+                throw new ClickHouseException("Unexpected IO Exception", ex);
             }
         }
 
         public bool Read()
         {
-            if(_currentBlock==null)
+            if (_currentBlock == null)
                 throw new InvalidOperationException("Trying to read beyond end of stream.");
             _currentRow++;
             if (_currentBlock.Rows <= _currentRow)
@@ -229,7 +242,7 @@ namespace ClickHouse.Ado
             return true;
         }
 
-        public int Depth { get; }=1;
+        public int Depth { get; } = 1;
         public bool IsClosed => _clickHouseConnection == null;
         public int RecordsAffected => _currentBlock.Rows;
     }
