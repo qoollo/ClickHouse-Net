@@ -33,8 +33,7 @@ namespace ClickHouse.Ado
         private Stream _stream;
         /*private BinaryReader _reader;
         private BinaryWriter _writer;*/
-        internal ProtocolFormatter Formatter { get;
-            set; }
+        internal ProtocolFormatter Formatter { get; set; }
         private NetworkStream _netStream;
 
         public void Dispose()
@@ -59,27 +58,27 @@ namespace ClickHouse.Ado
             if (_stream != null)
             {
 #if !NETSTANDARD15 && !NETCOREAPP11
-				_stream.Close();
+                _stream.Close();
 #endif
-				_stream.Dispose();
+                _stream.Dispose();
                 _stream = null;
             }
             if (_netStream != null)
             {
-#if !NETSTANDARD15 &&!NETCOREAPP11
-				_netStream.Close();
+#if !NETSTANDARD15 && !NETCOREAPP11
+                _netStream.Close();
 #endif
-				_netStream.Dispose();
+                _netStream.Dispose();
                 _netStream = null;
             }
             if (_tcpClient != null)
             {
 #if !NETSTANDARD15 && !NETCOREAPP11
-				_tcpClient.Close();
+                _tcpClient.Close();
 #else
 				_tcpClient.Dispose();
 #endif
-				_tcpClient = null;
+                _tcpClient = null;
             }
             if (Formatter != null)
             {
@@ -91,8 +90,8 @@ namespace ClickHouse.Ado
 
         public void Open()
         {
-            if(_tcpClient!=null)throw new InvalidOperationException("Connection already open.");
-            _tcpClient=new TcpClient();
+            if (_tcpClient != null) throw new InvalidOperationException("Connection already open.");
+            _tcpClient = new TcpClient();
             _tcpClient.ReceiveTimeout = ConnectionSettings.SocketTimeout;
             _tcpClient.SendTimeout = ConnectionSettings.SocketTimeout;
             //_tcpClient.NoDelay = true;
@@ -103,30 +102,43 @@ namespace ClickHouse.Ado
 #elif NETSTANDARD15
             _tcpClient.ConnectAsync(ConnectionSettings.Host, ConnectionSettings.Port).ConfigureAwait(false).GetAwaiter().GetResult();
 #else
-			_tcpClient.Connect(ConnectionSettings.Host, ConnectionSettings.Port);
+            _tcpClient.Connect(ConnectionSettings.Host, ConnectionSettings.Port);
 #endif
             _netStream = new NetworkStream(_tcpClient.Client);
-            _stream =new UnclosableStream(_netStream);
+            _stream = new UnclosableStream(_netStream);
             /*_reader=new BinaryReader(new UnclosableStream(_stream));
             _writer=new BinaryWriter(new UnclosableStream(_stream));*/
-            var ci=new ClientInfo();
+            var ci = new ClientInfo();
             ci.InitialAddress = ci.CurrentAddress = _tcpClient.Client.RemoteEndPoint;
             ci.PopulateEnvironment();
 
-            Formatter = new ProtocolFormatter(_stream,ci, ()=>_tcpClient.Client.Poll(ConnectionSettings.SocketTimeout, SelectMode.SelectRead));
+            Formatter = new ProtocolFormatter(_stream, ci, () => _tcpClient.Client.Poll(ConnectionSettings.SocketTimeout, SelectMode.SelectRead));
             Formatter.Handshake(ConnectionSettings);
         }
 
         public string ConnectionString
         {
             get { return ConnectionSettings.ToString(); }
-            set { ConnectionSettings=new ClickHouseConnectionSettings(value);}
+            set { ConnectionSettings = new ClickHouseConnectionSettings(value); }
         }
 
         public int ConnectionTimeout { get; set; }
         public string Database { get; private set; }
+
+        private bool _isBroken = false;
+
 #if !NETCOREAPP11
-        public ConnectionState State => Formatter != null ? ConnectionState.Open : ConnectionState.Closed;
+
+        public ConnectionState State
+        {
+            get
+            {
+                if (_isBroken)
+                    return ConnectionState.Broken;
+                else
+                    return Formatter != null ? ConnectionState.Open : ConnectionState.Closed;
+            }
+        }
 
         public IDbTransaction BeginTransaction()
         {
@@ -145,7 +157,7 @@ namespace ClickHouse.Ado
         public void ChangeDatabase(string databaseName)
         {
             CreateCommand("USE " + ProtocolFormatter.EscapeName(databaseName)).ExecuteNonQuery();
-            Database=databaseName;
+            Database = databaseName;
         }
 
         public ClickHouseCommand CreateCommand()
@@ -154,7 +166,13 @@ namespace ClickHouse.Ado
         }
         public ClickHouseCommand CreateCommand(string text)
         {
-            return new ClickHouseCommand(this,text);
+            return new ClickHouseCommand(this, text);
+        }
+
+        internal void MakeBroken()
+        {
+            _isBroken = true;
+            Close();
         }
     }
 }
