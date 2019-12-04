@@ -125,8 +125,20 @@ namespace ClickHouse.Ado
 
         public int ConnectionTimeout { get; set; }
         public string Database { get; private set; }
+
+        private bool _isBroken = false;
+
 #if !NETCOREAPP11
-        public ConnectionState State => Formatter != null ? ConnectionState.Open : ConnectionState.Closed;
+        public ConnectionState State
+        {
+            get
+            {
+                if (_isBroken)
+                    return ConnectionState.Broken;
+                else
+                    return Formatter != null ? ConnectionState.Open : ConnectionState.Closed;
+            }
+        }
 
         public IDbTransaction BeginTransaction()
         {
@@ -155,6 +167,12 @@ namespace ClickHouse.Ado
         public ClickHouseCommand CreateCommand(string text)
         {
             return new ClickHouseCommand(this,text);
+        }
+
+        internal void MakeBroken()
+        {
+            _isBroken = true;
+            Close();
         }
     }
 }

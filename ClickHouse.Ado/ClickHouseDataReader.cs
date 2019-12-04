@@ -1,6 +1,7 @@
 ﻿using System;
 #if !NETCOREAPP11
 using System.Data;
+using System.IO;
 #endif
 using ClickHouse.Ado.Impl;
 using ClickHouse.Ado.Impl.ColumnTypes;
@@ -190,6 +191,12 @@ namespace ClickHouse.Ado
             catch (ClickHouseException)
             {
                 _exceptionThrown = true;
+                _clickHouseConnection.MakeBroken();
+            }
+            catch (IOException)
+            {
+                _exceptionThrown = true;
+                _clickHouseConnection.MakeBroken();
             }
 #if !NETCOREAPP11
             if((_behavior&CommandBehavior.CloseConnection)!=0 || _exceptionThrown)
@@ -215,7 +222,14 @@ namespace ClickHouse.Ado
             catch (ClickHouseException)
             {
                 _exceptionThrown = true;
+                _clickHouseConnection.MakeBroken();
                 throw;
+            }
+            catch (IOException ex)
+            {
+                _exceptionThrown = true;
+                _clickHouseConnection.MakeBroken();
+                throw new ClickHouseException("Unexpected IO Exception", ex);
             }
         }
 

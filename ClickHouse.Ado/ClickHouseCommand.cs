@@ -80,77 +80,96 @@ namespace ClickHouse.Ado
             insertParser.errors.errorStream = new StringWriter();
             insertParser.Parse();
 
-            if (insertParser.errors.count == 0)
+            try
             {
-                var xText = new StringBuilder("INSERT INTO ");
-                xText.Append(insertParser.tableName);
-                if (insertParser.fieldList != null)
+                if (insertParser.errors.count == 0)
                 {
-                    xText.Append("(");
-                    insertParser.fieldList.Aggregate(xText, (builder, fld) => builder.Append(fld).Append(','));
-                    xText.Remove(xText.Length - 1, 1);
-                    xText.Append(")");
-                }
-                xText.Append(" VALUES");
+                    var xText = new StringBuilder("INSERT INTO ");
+                    xText.Append(insertParser.tableName);
+                    if (insertParser.fieldList != null)
+                    {
+                        xText.Append("(");
+                        insertParser.fieldList.Aggregate(xText, (builder, fld) => builder.Append(fld).Append(','));
+                        xText.Remove(xText.Length - 1, 1);
+                        xText.Append(")");
+                    }
+                    xText.Append(" VALUES");
 
-                connection.Formatter.RunQuery(xText.ToString(), QueryProcessingStage.Complete, null, null, null, false);
-                var schema = connection.Formatter.ReadSchema();
-                if (insertParser.oneParam != null)
-                {
-                    if (Parameters[insertParser.oneParam].Value is IBulkInsertEnumerable bulkInsertEnumerable) {
-                        var index = 0;
-                        foreach (var col in schema.Columns) {
-                            col.Type.ValuesFromConst(bulkInsertEnumerable.GetColumnData(index++, col.Name, col.Type.AsClickHouseType()));
-                        }
-                    } else {
-                        var table = ((IEnumerable) Parameters[insertParser.oneParam].Value).OfType<IEnumerable>();
-                        var colCount = table.First().Cast<object>().Count();
-                        if (colCount != schema.Columns.Count)
-                            throw new FormatException($"Column count in parameter table ({colCount}) doesn't match column count in schema ({schema.Columns.Count}).");
-                        var cl = new List<List<object>>(colCount);
-                        for (var i = 0; i < colCount; i++)
-                            cl.Add(new List<object>());
-                        var index = 0;
-                        cl = table.Aggregate(
-                            cl,
-                            (colList, row) => {
-                                index = 0;
-                                foreach (var cval in row) {
-                                    colList[index++].Add(cval);
-                                }
-
-                                return colList;
+                    connection.Formatter.RunQuery(xText.ToString(), QueryProcessingStage.Complete, null, null, null, false);
+                    var schema = connection.Formatter.ReadSchema();
+                    if (insertParser.oneParam != null)
+                    {
+                        if (Parameters[insertParser.oneParam].Value is IBulkInsertEnumerable bulkInsertEnumerable)
+                        {
+                            var index = 0;
+                            foreach (var col in schema.Columns)
+                            {
+                                col.Type.ValuesFromConst(bulkInsertEnumerable.GetColumnData(index++, col.Name, col.Type.AsClickHouseType()));
                             }
-                        );
-                        index = 0;
-                        foreach (var col in schema.Columns) {
-                            col.Type.ValuesFromConst(cl[index++]);
+                        }
+                        else
+                        {
+                            var table = ((IEnumerable)Parameters[insertParser.oneParam].Value).OfType<IEnumerable>();
+                            var colCount = table.First().Cast<object>().Count();
+                            if (colCount != schema.Columns.Count)
+                                throw new FormatException($"Column count in parameter table ({colCount}) doesn't match column count in schema ({schema.Columns.Count}).");
+                            var cl = new List<List<object>>(colCount);
+                            for (var i = 0; i < colCount; i++)
+                                cl.Add(new List<object>());
+                            var index = 0;
+                            cl = table.Aggregate(
+                                cl,
+                                (colList, row) => {
+                                    index = 0;
+                                    foreach (var cval in row)
+                                    {
+                                        colList[index++].Add(cval);
+                                    }
+
+                                    return colList;
+                                }
+                            );
+                            index = 0;
+                            foreach (var col in schema.Columns)
+                            {
+                                col.Type.ValuesFromConst(cl[index++]);
+                            }
                         }
                     }
+                    else
+                    {
+                        if (schema.Columns.Count != insertParser.valueList.Count())
+                            throw new FormatException($"Value count mismatch. Server expected {schema.Columns.Count} and query contains {insertParser.valueList.Count()}.");
+
+                        var valueList = insertParser.valueList as List<Parser.ValueType> ?? insertParser.valueList.ToList();
+                        for (var i = 0; i < valueList.Count; i++)
+                        {
+                            var val = valueList[i];
+                            if (val.TypeHint == Parser.ConstType.Parameter)
+                                schema.Columns[i].Type.ValueFromParam(Parameters[val.StringValue]);
+                            else
+                                schema.Columns[i].Type.ValueFromConst(val);
+                        }
+                    }
+                    connection.Formatter.SendBlocks(new[] { schema });
                 }
                 else
                 {
-                    if (schema.Columns.Count != insertParser.valueList.Count())
-                        throw new FormatException($"Value count mismatch. Server expected {schema.Columns.Count} and query contains {insertParser.valueList.Count()}.");
-
-                    var valueList = insertParser.valueList as List<Parser.ValueType> ?? insertParser.valueList.ToList();
-                    for (var i = 0; i < valueList.Count; i++)
-                    {
-                        var val = valueList[i];
-                        if (val.TypeHint == Parser.ConstType.Parameter)
-                            schema.Columns[i].Type.ValueFromParam(Parameters[val.StringValue]);
-                        else
-                            schema.Columns[i].Type.ValueFromConst(val);
-                    }
+                    connection.Formatter.RunQuery(SubstituteParameters(CommandText), QueryProcessingStage.Complete, null, null, null, false);
                 }
-                connection.Formatter.SendBlocks(new[] { schema });
+                if (!readResponse) return;
+                connection.Formatter.ReadResponse();
             }
-            else
+            catch (ClickHouseException)
             {
-                connection.Formatter.RunQuery(SubstituteParameters(CommandText), QueryProcessingStage.Complete, null, null, null, false);
+                connection.MakeBroken();
+                throw;
             }
-            if (!readResponse) return;
-            connection.Formatter.ReadResponse();
+            catch (IOException ex)
+            {
+                connection.MakeBroken();
+                throw new ClickHouseException("Unexpected IO Exception", ex);
+            }
         }
 
         private static readonly Regex ParamRegex = new Regex("[@:](?<n>([a-z_][a-z0-9_]*)|[@:])", RegexOptions.Compiled | RegexOptions.IgnoreCase);
