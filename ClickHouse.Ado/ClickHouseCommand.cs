@@ -18,13 +18,15 @@ namespace ClickHouse.Ado
         : IDbCommand
 #endif
     {
+        private ClickHouseConnection _clickHouseConnection;
+
         public ClickHouseCommand()
         {
         }
 
         public ClickHouseCommand(ClickHouseConnection clickHouseConnection)
         {
-            Connection = clickHouseConnection;
+            _clickHouseConnection = clickHouseConnection;
         }
 
         public ClickHouseCommand(ClickHouseConnection clickHouseConnection, string text) : this(clickHouseConnection)
@@ -57,8 +59,8 @@ namespace ClickHouse.Ado
         }
         IDbConnection IDbCommand.Connection
         {
-            get { return Connection; }
-            set { Connection = (ClickHouseConnection)value; }
+            get { return _clickHouseConnection; }
+            set { _clickHouseConnection = (ClickHouseConnection)value; }
         }
         public IDbTransaction Transaction { get; set; }
         public CommandType CommandType { get; set; }
@@ -74,7 +76,7 @@ namespace ClickHouse.Ado
                 throw new InvalidOperationException("Connection isn't open");
             }
 
-            var insertParser = new Parser(new Scanner(new MemoryStream(Encoding.UTF8.GetBytes(CommandText))));
+            var insertParser = new Impl.ATG.Insert.Parser(new Impl.ATG.Insert.Scanner(new MemoryStream(Encoding.UTF8.GetBytes(CommandText))));
             insertParser.errors.errorStream = new StringWriter();
             insertParser.Parse();
 
@@ -152,10 +154,10 @@ namespace ClickHouse.Ado
                     connection.Formatter.SendBlocks(new[] { schema });
                 }
                 else
+                {
                     connection.Formatter.RunQuery(SubstituteParameters(CommandText), QueryProcessingStage.Complete, null, null, null, false);
-                if (!readResponse)
-                    return;
-
+                }
+                if (!readResponse) return;
                 connection.Formatter.ReadResponse();
             }
             catch (ClickHouseException)
@@ -178,7 +180,7 @@ namespace ClickHouse.Ado
 
         public int ExecuteNonQuery()
         {
-            Execute(true, Connection);
+            Execute(true, _clickHouseConnection);
             return 0;
         }
 #if NETCOREAPP11
@@ -195,7 +197,7 @@ namespace ClickHouse.Ado
 
         public IDataReader ExecuteReader(CommandBehavior behavior)
         {
-            var tempConnection = Connection;
+            var tempConnection = _clickHouseConnection;
             Execute(false, tempConnection);
             return new ClickHouseDataReader(tempConnection, behavior);
         }
@@ -215,7 +217,12 @@ namespace ClickHouse.Ado
             return result;
         }
 
-        public ClickHouseConnection Connection { get; set; }
+        public ClickHouseConnection Connection
+        {
+            get => _clickHouseConnection;
+            set => _clickHouseConnection = value;
+        }
+
         public string CommandText { get; set; }
         public int CommandTimeout { get; set; }
         public ClickHouseParameterCollection Parameters { get; } = new ClickHouseParameterCollection();
