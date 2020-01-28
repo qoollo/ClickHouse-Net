@@ -57,6 +57,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="ClickHouseConnectionSettingsTests\ToStringTests.cs" />
+    <Compile Include="ClickHouseParameterTest.cs" />
     <Compile Include="SimpleTests.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
