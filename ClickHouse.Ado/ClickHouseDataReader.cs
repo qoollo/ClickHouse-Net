@@ -155,7 +155,9 @@ namespace ClickHouse.Ado
 
         public DateTime GetDateTime(int i)
         {
-            return Convert.ToDateTime(GetValue(i));
+            if (_currentBlock == null || _currentBlock.Rows <= _currentRow || i < 0 || i >= FieldCount)
+                throw new InvalidOperationException("Trying to read beyond end of stream.");
+            return _currentBlock.Columns[i].Type.DateValue(_currentRow);
         }
 #if !NETCOREAPP11
         public IDataReader GetData(int i)
