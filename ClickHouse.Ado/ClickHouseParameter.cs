@@ -46,9 +46,9 @@ namespace ClickHouse.Ado
 #endif
                 || (DbType==0 && val is DateTime)
             )
-                return $"toDateTime('{((DateTime)val).ToUniversalTime():yyyy-MM-dd HH:mm:ss}', 'UTC')";
+                return $"toDateTime('{((DateTime)val):yyyy-MM-dd HH:mm:ss}', 'UTC')";
             if (DbType == DbType.Date)
-                return $"toDate('{((DateTime)val).ToUniversalTime():yyyy-MM-dd}', 'UTC')";
+                return $"toDate('{((DateTime)val):yyyy-MM-dd}', 'UTC')";
             if ((DbType != 0
 #if !NETCOREAPP11
                  && DbType != DbType.Object
