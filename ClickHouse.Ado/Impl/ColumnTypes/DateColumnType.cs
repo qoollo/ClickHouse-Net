@@ -84,6 +84,11 @@ namespace ClickHouse.Ado.Impl.ColumnTypes
             return Data[currentRow];
         }
 
+        public override DateTime DateValue(int currentRow)
+        {
+            return Data[currentRow];
+        }
+
         public override long IntValue(int currentRow)
         {
             throw new InvalidCastException();

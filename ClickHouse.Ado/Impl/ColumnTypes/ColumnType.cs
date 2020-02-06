@@ -122,6 +122,7 @@ namespace ClickHouse.Ado.Impl.ColumnTypes
         public abstract void ValueFromParam(ClickHouseParameter parameter);
         public abstract object Value(int currentRow);
         public abstract long IntValue(int currentRow);
+        public virtual DateTime DateValue(int currentRow) { return Convert.ToDateTime(Value(currentRow)); }
         public abstract void ValuesFromConst(IEnumerable objects);
 
         public virtual void NullableValuesFromConst(IEnumerable objects)
